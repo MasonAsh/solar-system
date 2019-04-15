@@ -15,7 +15,7 @@ type Vec2 = (Float, Float)
 (<+>) :: Vec2 -> Vec2 -> Vec2
 (<+>) (x0, y0) (x1, y1) = (x0 + x1, y0 + y1)
 
-sunSize = 0.2
+sunSize = 0.10
 
 translateVec2 = uncurry Translate
 
@@ -43,13 +43,14 @@ orbitPos orbit = (x, y)
     ea = eccentricAnomaly m e
     time = t orbit
     m = time * n
-    n = (0.5 / a ^ 3)
+    n = (0.005 / a ^ 3)
     w = ptheta orbit
 
 data Planet = Planet
   { orbit :: Orbit
   , radius :: Float
   , c :: Color
+  , moons :: [Planet]
   }
 
 data World =
@@ -78,23 +79,52 @@ initialWorld =
     [ Planet
         { orbit =
             Orbit
-              {majorAxis = 0.7, eccentricity = 0.4, t = 0, ptheta = (pi * 0.3)}
+              {majorAxis = 0.7, eccentricity = 0.3, t = 0, ptheta = (pi * 0.3)}
         , radius = 0.02
         , c = white
+        , moons =
+            [ Planet
+                { orbit =
+                    Orbit
+                      { majorAxis = 0.08
+                      , eccentricity = 0.2
+                      , t = 0
+                      , ptheta = (pi * 0.3)
+                      }
+                , radius = 0.0015
+                , c = white
+                , moons = []
+                }
+            ]
         }
     , Planet
         { orbit =
             Orbit
-              {majorAxis = 0.6, eccentricity = 0.24, t = 20, ptheta = pi * 1.3}
+              {majorAxis = 0.70, eccentricity = 0.24, t = -25, ptheta = pi * 1.3}
         , radius = 0.05
         , c = red
+        , moons =
+            [ Planet
+                { orbit =
+                    Orbit
+                      { majorAxis = 0.12
+                      , eccentricity = 0.05
+                      , t = 0
+                      , ptheta = (pi * 0.5)
+                      }
+                , radius = 0.016
+                , c = magenta
+                , moons = []
+                }
+            ]
         }
     , Planet
         { orbit =
             Orbit
-              {majorAxis = 0.5, eccentricity = 0.08, t = 12, ptheta = pi * 2.3}
+              {majorAxis = 0.25, eccentricity = 0.08, t = 26, ptheta = pi * 3.0}
         , radius = 0.032
         , c = orange
+        , moons = []
         }
     , Planet
         { orbit =
@@ -102,6 +132,7 @@ initialWorld =
               {majorAxis = 0.90, eccentricity = 0.05, t = 20, ptheta = pi * 0.4}
         , radius = 0.032
         , c = blue
+        , moons = []
         }
     ]
 
@@ -129,17 +160,19 @@ sun :: Picture
 sun = Color yellow $ circleSolid sunSize
 
 renderPlanet :: Planet -> Picture
-renderPlanet planet =
-  Color (c planet) $
-  translateVec2 (orbitPos . orbit $ planet) $ circleSolid (radius planet)
+renderPlanet planet = Color (c planet) $ Pictures $ planetPic : moonPics
+  where
+    planetPic = translateVec2 planetPos $ circleSolid (radius planet)
+    moonPics = map (translateVec2 planetPos . renderPlanet) (moons planet)
+    planetPos = orbitPos . orbit $ planet
 
 render (World planets) =
   worldSpaceToScreenSpace $ Pictures $ sun : map renderPlanet planets
 
 handleEvent event world = world
 
-updatePlanet dt planet@(Planet {orbit = o}) =
-  planet {orbit = o {t = (t o) + dt}}
+updatePlanet dt planet@(Planet {orbit = o, moons = ms}) =
+  planet {orbit = o {t = (t o) + dt}, moons = (map (updatePlanet dt) ms)}
 
 updateWorld :: Float -> World -> World
 updateWorld dt (World things) = World $ map (updatePlanet dt) things
